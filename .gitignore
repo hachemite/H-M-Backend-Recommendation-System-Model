@@ -1,0 +1,7 @@
+db/hm_lean_project
+.venv
+db/hm_lean.db
+
+db/
+
+.env

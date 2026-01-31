@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <title>H&M ILIA Pro Shop</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        .glass { background: rgba(15, 23, 42, 0.9); backdrop-filter: blur(10px); }
+        .custom-scroll::-webkit-scrollbar { width: 6px; }
+        .custom-scroll::-webkit-scrollbar-thumb { background: #06b6d4; border-radius: 4px; }
+        .slide-in { animation: slideIn 0.3s ease-out forwards; }
+        @keyframes slideIn { from { transform: translateX(100%); } to { transform: translateX(0); } }
+    </style>
+</head>
+<body class="bg-slate-950 text-slate-200 font-sans custom-scroll overflow-x-hidden">
+
+    <div id="authModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm hidden">
+        <div class="bg-slate-900 p-8 rounded-2xl border border-slate-700 w-96 shadow-2xl">
+            <h2 class="text-2xl font-bold text-cyan-400 mb-6 text-center">ILIA ACCESS</h2>
+            <input id="username" type="text" placeholder="Username" class="w-full bg-slate-800 border border-slate-700 rounded p-3 mb-3 outline-none focus:border-cyan-500">
+            <input id="password" type="password" placeholder="Password" class="w-full bg-slate-800 border border-slate-700 rounded p-3 mb-6 outline-none focus:border-cyan-500">
+            <button onclick="login()" class="w-full bg-cyan-600 hover:bg-cyan-500 text-white font-bold py-3 rounded transition mb-3">LOGIN</button>
+            <button onclick="closeAuth()" class="w-full text-slate-500 text-xs hover:text-white">Cancel</button>
+        </div>
+    </div>
+
+    <div id="cartSidebar" class="fixed top-0 right-0 h-full w-80 bg-slate-900 border-l border-slate-800 z-40 transform translate-x-full transition-transform duration-300 shadow-2xl flex flex-col">
+        <div class="p-6 border-b border-slate-800 flex justify-between items-center">
+            <h2 class="text-xl font-bold text-white"><i class="fas fa-shopping-bag text-cyan-400 mr-2"></i> Panier</h2>
+            <button onclick="toggleCart()" class="text-slate-400 hover:text-white"><i class="fas fa-times"></i></button>
+        </div>
+        <div id="cartItems" class="flex-1 overflow-y-auto p-4 space-y-4 custom-scroll">
+            <p class="text-center text-slate-600 mt-10 italic">Votre panier est vide.</p>
+        </div>
+        <div class="p-6 border-t border-slate-800 bg-slate-900">
+            <button class="w-full bg-cyan-600 hover:bg-cyan-500 py-3 rounded font-bold text-white transition">CHECKOUT</button>
+        </div>
+    </div>
+
+    <main class="max-w-7xl mx-auto p-6 transition-all duration-300" id="mainContainer">
+        
+        <nav class="flex justify-between items-center mb-10 py-4 border-b border-slate-800">
+            <div>
+                <h1 class="text-2xl font-black tracking-tighter text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-600">
+                    ILIA<span class="text-white">STORE</span>
+                </h1>
+            </div>
+            <div class="flex gap-4 items-center">
+                <span id="userDisplay" class="text-xs font-mono text-cyan-500 hidden">User: <span id="userNameSpan"></span></span>
+                <button onclick="toggleAuth()" id="authBtn" class="bg-slate-800 hover:bg-slate-700 px-4 py-2 rounded text-xs font-bold border border-slate-700">
+                    LOGIN
+                </button>
+                <button onclick="toggleCart()" class="relative bg-slate-800 hover:bg-slate-700 px-4 py-2 rounded text-xs font-bold border border-slate-700">
+                    <i class="fas fa-shopping-cart"></i>
+                    <span id="cartCount" class="absolute -top-1 -right-1 bg-cyan-500 text-black text-[9px] font-bold px-1.5 rounded-full hidden">0</span>
+                </button>
+            </div>
+        </nav>
+
+        <section class="mb-12 bg-slate-900/50 p-6 rounded-2xl border border-slate-800">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 items-end">
+                <div>
+                    <label class="text-[10px] uppercase font-bold text-slate-500">Category</label>
+                    <select id="catFilter" class="w-full bg-slate-950 border border-slate-800 rounded p-2 text-sm mt-1 outline-none focus:border-cyan-500">
+                        <option value="All">All Departments</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="text-[10px] uppercase font-bold text-slate-500">Price Limit: <span id="priceLabel" class="text-cyan-400">0.05</span></label>
+                    <input type="range" id="priceFilter" min="0" max="0.1" step="0.001" value="0.05" oninput="updatePrice(this.value)" class="w-full mt-2 accent-cyan-500 h-1 bg-slate-800 rounded appearance-none">
+                </div>
+                <button onclick="loadBoutique()" class="bg-white text-black font-bold py-2 rounded hover:bg-cyan-400 transition">
+                    UPDATE SHOP
+                </button>
+            </div>
+        </section>
+
+        <section class="mb-16">
+            <h2 class="text-xl font-bold mb-6 flex items-center gap-2"><i class="fas fa-store text-slate-500"></i> New Arrivals</h2>
+            <div id="boutiqueGrid" class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4"></div>
+        </section>
+
+        <section id="aiSection" class="hidden pt-10 border-t border-slate-800 animate-in fade-in">
+            <div class="flex items-center justify-between mb-8">
+                <div>
+                    <h2 class="text-3xl font-bold text-white">AI Recommendations</h2>
+                    <p class="text-slate-500 text-sm">Visually similar items from latent space</p>
+                </div>
+                <button onclick="document.getElementById('aiSection').classList.add('hidden')" class="text-slate-600 hover:text-white"><i class="fas fa-times"></i> Close AI</button>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                <div class="lg:col-span-1">
+                    <div class="sticky top-6">
+                        <div class="rounded-xl overflow-hidden border-2 border-cyan-500 shadow-[0_0_30px_rgba(34,211,238,0.2)]">
+                            <img id="sourceImg" class="w-full h-96 object-cover">
+                            <div class="p-6 bg-slate-900">
+                                <h3 id="sourceName" class="text-xl font-bold text-white mb-2"></h3>
+                                <p id="sourceDesc" class="text-slate-400 text-xs leading-relaxed mb-4"></p>
+                                <div class="flex gap-2 mb-4">
+                                    <span id="sourceColor" class="px-2 py-1 bg-slate-800 rounded text-[10px] text-cyan-400 border border-slate-700"></span>
+                                    <span id="sourceSection" class="px-2 py-1 bg-slate-800 rounded text-[10px] text-purple-400 border border-slate-700"></span>
+                                </div>
+                                <button onclick="addToCartSource()" class="w-full bg-cyan-600 hover:bg-cyan-500 py-3 rounded font-bold text-white flex justify-center items-center gap-2">
+                                    <i class="fas fa-plus"></i> ADD SOURCE TO CART
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="lg:col-span-2">
+                    <div id="recsGrid" class="grid grid-cols-2 md:grid-cols-3 gap-4"></div>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <script>
+        const API_URL = "http://127.0.0.1:8000";
+        let token = localStorage.getItem("token");
+        let currentSourceId = null;
+
+        // --- INIT ---
+        window.onload = async () => {
+            checkAuth();
+            await loadCategories();
+            await loadBoutique();
+            if(token) updateCart();
+        };
+
+        function checkAuth() {
+            if (token) {
+                const payload = JSON.parse(atob(token.split('.')[1]));
+                document.getElementById('userNameSpan').innerText = payload.sub;
+                document.getElementById('userDisplay').classList.remove('hidden');
+                document.getElementById('authBtn').innerText = "LOGOUT";
+                document.getElementById('authBtn').onclick = logout;
+            }
+        }
+
+        // --- AUTH ---
+        function toggleAuth() { document.getElementById('authModal').classList.remove('hidden'); }
+        function closeAuth() { document.getElementById('authModal').classList.add('hidden'); }
+        
+        async function login() {
+            const u = document.getElementById('username').value;
+            const p = document.getElementById('password').value;
+            const formData = new FormData();
+            formData.append('username', u);
+            formData.append('password', p);
+
+            try {
+                const res = await fetch(`${API_URL}/login`, { method: 'POST', body: formData });
+                if (!res.ok) throw new Error();
+                const data = await res.json();
+                localStorage.setItem("token", data.access_token);
+                token = data.access_token;
+                closeAuth();
+                checkAuth();
+                updateCart();
+            } catch { alert("Login failed"); }
+        }
+
+        function logout() {
+            localStorage.removeItem("token");
+            location.reload();
+        }
+
+        // --- SHOP LOGIC ---
+        function updatePrice(val) { document.getElementById('priceLabel').innerText = val; }
+
+        async function loadCategories() {
+            const res = await fetch(`${API_URL}/categories`);
+            const cats = await res.json();
+            const sel = document.getElementById('catFilter');
+            cats.forEach(c => sel.innerHTML += `<option value="${c}">${c}</option>`);
+        }
+
+        async function loadBoutique() {
+            const cat = document.getElementById('catFilter').value;
+            const price = document.getElementById('priceFilter').value;
+            const grid = document.getElementById('boutiqueGrid');
+            
+            grid.innerHTML = "<p class='col-span-full text-center py-10 opacity-50'>Loading...</p>";
+            
+            const res = await fetch(`${API_URL}/boutique?product_group=${cat}&max_price=${price}`);
+            const data = await res.json();
+            
+            grid.innerHTML = "";
+            data.forEach(item => {
+                grid.innerHTML += createCard(item);
+            });
+        }
+
+        async function fetchRecs(id, name, type, img, desc, color, section) {
+            currentSourceId = id;
+            document.getElementById('aiSection').classList.remove('hidden');
+            document.getElementById('aiSection').scrollIntoView({behavior: 'smooth'});
+            
+            // Populate Source Card
+            document.getElementById('sourceImg').src = API_URL + img;
+            document.getElementById('sourceName').innerText = name;
+            document.getElementById('sourceDesc').innerText = desc || "No description available.";
+            document.getElementById('sourceColor').innerText = color || "N/A";
+            document.getElementById('sourceSection').innerText = section || "General";
+
+            const grid = document.getElementById('recsGrid');
+            grid.innerHTML = "<p class='col-span-full text-center text-cyan-500 animate-pulse'>Computing Latent Vectors...</p>";
+
+            const res = await fetch(`${API_URL}/recommend/${id}`);
+            const data = await res.json();
+            
+            grid.innerHTML = "";
+            data.recommendations.forEach(item => {
+                grid.innerHTML += createCard(item);
+            });
+        }
+
+        function createCard(item) {
+            // Escaping for JS strings
+            const sName = item.prod_name.replace(/'/g, "\\'");
+            const sDesc = (item.detail_desc || "").replace(/'/g, "\\'").replace(/\n/g, "");
+            
+            return `
+                <div class="group bg-slate-900 rounded-lg overflow-hidden border border-slate-800 hover:border-cyan-500 transition relative">
+                    <div class="relative h-64 overflow-hidden cursor-pointer" 
+                         onclick="fetchRecs(${item.article_id}, '${sName}', '${item.product_type_name}', '${item.image_path}', '${sDesc}', '${item.colour_group_name}', '${item.section_name}')">
+                        <img src="${API_URL}${item.image_path}" class="w-full h-full object-cover opacity-80 group-hover:opacity-100 group-hover:scale-110 transition duration-500">
+                    </div>
+                    <div class="p-3">
+                        <h3 class="text-xs font-bold text-white truncate">${item.prod_name}</h3>
+                        <p class="text-[10px] text-slate-500 uppercase mt-1 mb-2">${item.product_type_name}</p>
+                        <div class="flex justify-between items-center">
+                            <span class="text-cyan-400 font-mono text-xs">${item.price.toFixed(3)}</span>
+                            <button onclick="addToCart(${item.article_id})" class="text-slate-400 hover:text-white bg-slate-800 p-1.5 rounded hover:bg-cyan-600 transition">
+                                <i class="fas fa-plus"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        // --- CART LOGIC ---
+        function toggleCart() {
+            const sb = document.getElementById('cartSidebar');
+            sb.classList.toggle('translate-x-full');
+        }
+
+        async function addToCart(id) {
+            if (!token) return toggleAuth();
+            
+            const res = await fetch(`${API_URL}/cart/add/${id}`, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            
+            if(res.ok) {
+                updateCart();
+                // Simple feedback animation
+                const btn = document.querySelector(`button[onclick="addToCart(${id})"]`);
+                if(btn) {
+                    const original = btn.innerHTML;
+                    btn.innerHTML = "<i class='fas fa-check'></i>";
+                    btn.classList.add("text-green-400");
+                    setTimeout(() => { btn.innerHTML = original; btn.classList.remove("text-green-400"); }, 1000);
+                }
+            }
+        }
+        
+        function addToCartSource() {
+            if(currentSourceId) addToCart(currentSourceId);
+        }
+
+        async function updateCart() {
+            if(!token) return;
+            const res = await fetch(`${API_URL}/cart`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const items = await res.json();
+            
+            const container = document.getElementById('cartItems');
+            const counter = document.getElementById('cartCount');
+            
+            counter.innerText = items.length;
+            counter.classList.remove('hidden');
+
+            if(items.length === 0) {
+                container.innerHTML = "<p class='text-center text-slate-600 mt-10 italic'>Empty</p>";
+                return;
+            }
+
+            container.innerHTML = "";
+            items.forEach(item => {
+                container.innerHTML += `
+                    <div class="flex gap-3 bg-slate-800 p-2 rounded mb-2 border border-slate-700">
+                        <img src="${API_URL}${item.image_path}" class="w-12 h-16 object-cover rounded">
+                        <div class="flex-1 min-w-0">
+                            <h4 class="text-xs font-bold text-white truncate">${item.prod_name}</h4>
+                            <p class="text-[10px] text-slate-400">${item.colour_group_name}</p>
+                            <p class="text-cyan-400 font-mono text-xs mt-1">${item.price.toFixed(3)}</p>
+                        </div>
+                        <button onclick="removeFromCart(${item.article_id})" class="text-red-500 hover:text-red-400 px-2">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </div>
+                `;
+            });
+        }
+
+        async function removeFromCart(id) {
+            await fetch(`${API_URL}/cart/remove/${id}`, {
+                method: 'DELETE',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            updateCart();
+        }
+    </script>
+</body>
+</html>
