@@ -19,7 +19,7 @@ from jose import JWTError, jwt
 from passlib.context import CryptContext
 from dotenv import load_dotenv  # <-- NEW
 
-# --- LOAD ENV VARIABLES ---
+#ENV 
 load_dotenv()
 
 SECRET_KEY = os.getenv("SECRET_KEY")
@@ -31,17 +31,17 @@ DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./db/hm_lean.db")
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
 
-# --- PATHS ---
+# PATHS
 BASE_DIR = Path(__file__).resolve().parent
 DB_PATH = BASE_DIR / "db" / "hm_lean.db"
 IMAGE_DIR = BASE_DIR / "db" / "hm_lean_project" / "images_lean"
 MODELS_DIR = BASE_DIR / "models"
 
-# --- GLOBAL STATE ---
+# GLOBAL STATE Dictionary for ram managemest faster
 brain = {}
 prices_cache = {}
 
-# --- MODELS ---
+# database models user and etc 
 class UserRegister(BaseModel):
     username: str
     password: str
@@ -66,6 +66,7 @@ def init_db():
             birth_date TEXT
         )
     """)
+    
     conn.execute("""
         CREATE TABLE IF NOT EXISTS cart (
             user_id INTEGER,
@@ -77,25 +78,24 @@ def init_db():
     """)
     conn.close()
 
-# --- LIFESPAN ---
-@asynccontextmanager
+@asynccontextmanager  # trigger one time at startup/shutdown 
 async def lifespan(app: FastAPI):
-    print("⏳ Startup: Loading Brain & Cache...")
+    print("Startup: Loading Brain & Cache...")
     init_db()
     
     # 1. Load AI Vectors
     if MODELS_DIR.exists():
+        # pickle load the model to the ram faster pour io 
         with open(MODELS_DIR / "model_vectors.pkl", "rb") as f:
             data = pickle.load(f)
             brain['ids'] = data['article_ids'] if 'article_ids' in data else data['ids']
             brain['vectors'] = data['vectors']
 
-    # 2. Cache Prices (Optimisation)
+ 
     conn = sqlite3.connect(DB_PATH)
-    # On aligne le cerveau avec la DB
     db_ids = pd.read_sql("SELECT article_id FROM articles", conn)['article_id'].values
     
-    print("⚡ Caching prices...")
+    print("Caching prices...")
     # On prend le MAX price pour être sûr (ou AVG)
     price_df = pd.read_sql("SELECT article_id, MAX(price) as price FROM transactions GROUP BY article_id", conn)
     global prices_cache
@@ -108,7 +108,7 @@ async def lifespan(app: FastAPI):
     brain['vectors'] = brain['vectors'][mask]
     brain['ids'] = brain['ids'][mask]
     
-    print(f"✅ Ready: {len(brain['ids'])} items active.")
+    print(f"Ready: {len(brain['ids'])} items active.")
     yield
     brain.clear()
     prices_cache.clear()
@@ -116,14 +116,14 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="H&M ILIA Pro Shop", lifespan=lifespan)
 
 app.add_middleware(
-    CORSMiddleware,
+    CORSMiddleware, # Cross-Origin Resource Sharing
     allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["*"], # ALL methods are allowed get/post/put/delete
+    allow_headers=["*"], # ALL headers are allowed let us use custom headers like Authorization
 )
 app.mount("/static", StaticFiles(directory=str(IMAGE_DIR)), name="static")
 
-# --- AUTH HELPERS ---
+# AUTH 
 def create_access_token(data: dict):
     to_encode = data.copy()
     expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
@@ -144,7 +144,7 @@ async def get_current_user(token: str = Depends(oauth2_scheme)):
     if user is None: raise HTTPException(status_code=401, detail="User not found")
     return {"id": user[0], "username": user[1]}
 
-# --- AUTH ENDPOINTS ---
+# AUTH ENDPOINTS
 @app.post("/register", status_code=201)
 async def register(user: UserRegister):
     conn = sqlite3.connect(DB_PATH)
@@ -168,7 +168,7 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends()):
         raise HTTPException(status_code=401, detail="Bad credentials")
     return {"access_token": create_access_token({"sub": form_data.username}), "token_type": "bearer"}
 
-# --- CART ENDPOINTS ---
+# CART 
 @app.post("/cart/add/{article_id}")
 async def add_to_cart(article_id: int, user: dict = Depends(get_current_user)):
     conn = sqlite3.connect(DB_PATH)
@@ -206,7 +206,7 @@ async def view_cart(user: dict = Depends(get_current_user)):
         results.append(item)
     return results
 
-# --- SHOP & AI ENDPOINTS (ENRICHIS) ---
+# SHOP & AI ENDPOINTS pour boutique les element aleoratoire dans l'espace principale
 def enrich_results(df_items):
     """Ajoute prix et image aux résultats"""
     results = []
@@ -222,7 +222,6 @@ def enrich_results(df_items):
 @app.get("/boutique")
 async def get_boutique(product_group: str = None, max_price: float = None, limit: int = 20):
     conn = sqlite3.connect(DB_PATH)
-    # Récupération enrichie
     query = "SELECT article_id, prod_name, product_type_name, product_group_name, detail_desc, colour_group_name, section_name FROM articles WHERE 1=1"
     params = []
 
@@ -231,7 +230,7 @@ async def get_boutique(product_group: str = None, max_price: float = None, limit
         params.append(product_group)
     
     query += " ORDER BY RANDOM() LIMIT ?"
-    params.append(limit * 4) # Buffer pour filtre prix
+    params.append(limit * 4) # Buffer pour filtrage python
 
     df = pd.read_sql(query, conn, params=params)
     conn.close()
@@ -255,12 +254,11 @@ async def recommend(article_id: int, top_k: int = 5):
         raise HTTPException(404, "Item not in AI Model")
 
     dists = euclidean_distances(vec, brain['vectors']).flatten()
-    indices = dists.argsort()[1:top_k+1] # Skip self
+    indices = dists.argsort()[1:top_k+1] 
     rec_ids = brain['ids'][indices].tolist()
 
     conn = sqlite3.connect(DB_PATH)
     placeholders = ','.join(['?']*len(rec_ids))
-    # Récupération enrichie
     query = f"SELECT article_id, prod_name, product_type_name, product_group_name, detail_desc, colour_group_name, section_name FROM articles WHERE article_id IN ({placeholders})"
     df = pd.read_sql(query, conn, params=rec_ids)
     conn.close()
@@ -277,6 +275,26 @@ async def get_categories():
 @app.get("/random-id")
 async def random_id():
     return {"article_id": int(random.choice(brain['ids']))}
+
+@app.get("/article/{article_id}")
+async def get_article(article_id: int):
+    conn = sqlite3.connect(DB_PATH)
+    query = """
+        SELECT article_id, prod_name, product_type_name, product_group_name,
+               detail_desc, colour_group_name, section_name
+        FROM articles
+        WHERE article_id = ?
+    """
+    df = pd.read_sql(query, conn, params=(article_id,))
+    conn.close()
+
+    if df.empty:
+        raise HTTPException(status_code=404, detail="Article not found")
+
+    item = df.iloc[0].to_dict()
+    item['price'] = prices_cache.get(article_id, 0.0)
+    item['image_path'] = f"/static/{str(article_id).zfill(10)}.jpg"
+    return item
 
 if __name__ == "__main__":
     import uvicorn
